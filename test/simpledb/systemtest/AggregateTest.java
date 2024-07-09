@@ -91,9 +91,11 @@ public class AggregateTest extends SimpleDbTestBase {
         // Compute the expected answer
         List<List<Integer>> expected =
                 aggregate(createdTuples, operation, groupColumn);
+//        System.out.println(expected);
 
         // validate that we get the answer
         validateAggregate(table, operation, 1, groupColumn, expected);
+
     }
 
     @Test public void testSum() throws IOException, DbException, TransactionAbortedException {

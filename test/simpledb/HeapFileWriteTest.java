@@ -37,6 +37,7 @@ public class HeapFileWriteTest extends TestUtil.CreateHeapFile {
         for (int i = 0; i < 504; ++i) {
             empty.insertTuple(tid, Utility.getHeapTuple(i, 2));
             assertEquals(1, empty.numPages());
+//            System.out.println("1");
         }
 
         // the next 512 additions should live on a new page

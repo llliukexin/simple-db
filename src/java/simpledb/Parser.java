@@ -20,6 +20,7 @@ import simpledb.storage.StringField;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.Transaction;
+import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 public class Parser {
@@ -318,7 +319,7 @@ public class Parser {
 
     public Query handleInsertStatement(ZInsert s, TransactionId tId)
             throws DbException, IOException,
-            simpledb.ParsingException, Zql.ParseException {
+            simpledb.ParsingException, Zql.ParseException, TransactionAbortedException {
         int tableId;
         try {
             tableId = Database.getCatalog().getTableId(s.getTable()); // will

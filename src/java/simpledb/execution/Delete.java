@@ -19,6 +19,10 @@ import java.io.IOException;
 public class Delete extends Operator {
 
     private static final long serialVersionUID = 1L;
+    private TransactionId tid;
+    private OpIterator child;
+    private TupleDesc returnTD;
+    private boolean called;
 
     /**
      * Constructor specifying the transaction that this delete belongs to as
@@ -31,23 +35,33 @@ public class Delete extends Operator {
      */
     public Delete(TransactionId t, OpIterator child) {
         // some code goes here
+        this.tid = t;
+        this.child = child;
+        this.returnTD = new TupleDesc(new Type[]{Type.INT_TYPE}, new String[]{"deleteCount"});
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return returnTD;
     }
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
+        super.open();
+        child.open();
+        this.called = false;
     }
 
     public void close() {
         // some code goes here
+        super.close();
+        child.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        close();
+        open();
     }
 
     /**
@@ -61,7 +75,23 @@ public class Delete extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if (called)
+            return null;
+        int count = 0;
+        BufferPool bufferPool = Database.getBufferPool();
+        while (child.hasNext()){
+            Tuple deleteTuple = child.next();
+            try{
+                bufferPool.deleteTuple(tid, deleteTuple);
+                count++;
+            } catch (IOException e) {
+                throw new DbException("delete fail.");
+            }
+        }
+        called = true;
+        Tuple returnTuple = new Tuple(returnTD);
+        returnTuple.setField(0, new IntField(count));
+        return returnTuple;
     }
 
     @Override

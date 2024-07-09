@@ -451,6 +451,8 @@ public class LogFile {
         transaction semantics, this should not be called on
         transactions that have already committed (though this may not
         be enforced by this method.)
+        回滚指定的事务，将其更新的任何页面的状态设置为其更新前的状态。
+        为了保留事务语义，不应在已提交的事务上调用此方法（尽管此方法可能不会强制执行此操作）。
 
         @param tid The transaction to rollback
     */
@@ -460,6 +462,79 @@ public class LogFile {
             synchronized(this) {
                 preAppend();
                 // some code goes here
+                if(!tidToFirstLogRecord.containsKey(tid.getId()))
+                    return;
+                // 获取第一个日志记录偏移
+                long startOffset = tidToFirstLogRecord.get(tid.getId());
+                raf.seek(startOffset);
+                Set<PageId> rollbackPage = new HashSet<>();
+                while (true){
+                    try {
+                        int type = raf.readInt(); // log record type
+                        long logTid = raf.readLong(); // transaction Id
+
+                        if (type == UPDATE_RECORD ){// 只针对update_record 进行rollback
+                            Page beforePage = readPageData(raf);
+                            Page afterPage = readPageData(raf);
+                            if (!rollbackPage.contains(beforePage.getId()) && logTid == tid.getId()){// 写回before_record
+                                rollbackPage.add(beforePage.getId());
+                                DbFile tableFile = Database.getCatalog().getDatabaseFile(beforePage.getId().getTableId());
+                                tableFile.writePage(beforePage);
+                                // 从缓冲池删掉
+                                Database.getBufferPool().discardPage(afterPage.getId());
+                            }
+                        } else if (type == CHECKPOINT_RECORD) {
+                            int keySize = raf.readInt();
+                            while (keySize-- > 0) {
+                                raf.readLong();
+                                raf.readLong();
+                            }
+                        }
+
+
+                        raf.readLong();
+
+
+                    } catch (IOException e) {
+                        // end of log file
+                        break;
+                    }
+
+                }
+//                raf.seek(tidToFirstLogRecord.get(tid.getId()));
+//                Set<PageId> rollbackPage = new HashSet<>();
+//                while (true){
+//                    try {
+//                        int curType = raf.readInt();
+//                        long curTid = raf.readLong();
+//                        // 每次回滚对应页只能回滚上一次版本，因此一个页中的多次修改记录也只能rollback一次
+//                        switch (curType){
+//                            // 除了update其他全都略过
+//                            case CHECKPOINT_RECORD:
+//                                int keySize = raf.readInt();
+//                                while (keySize-- > 0) {
+//                                    raf.readLong();
+//                                    raf.readLong();
+//                                }
+//                                break;
+//                            case UPDATE_RECORD:
+//                                Page beforeImg = readPageData(raf);
+//                                Page afterImg = readPageData(raf);
+//                                if(curTid == tid.getId() && !rollbackPage.contains(beforeImg.getId())){
+//                                    rollbackPage.add(beforeImg.getId());
+//                                    DbFile file = Database.getCatalog().getDatabaseFile(beforeImg.getId().getTableId());
+//                                    file.writePage(beforeImg);
+//                                    Database.getBufferPool().discardPage(afterImg.getId());
+//                                }
+//
+//                        }
+//                        // 略过offset
+//                        raf.readLong();
+//                    }catch (EOFException e){
+//                        break;
+//                    }
+//
+//                }
             }
         }
     }
@@ -481,15 +556,114 @@ public class LogFile {
     /** Recover the database system by ensuring that the updates of
         committed transactions are installed and that the
         updates of uncommitted transactions are not installed.
+        刚好执行到commit写入log后但是未force此时crash了，这时需要redo
     */
     public void recover() throws IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                raf = new RandomAccessFile(logFile, "rw");
+                Map<Long, List<Page>> beforePage = new HashMap<>();
+                Map<Long, List<Page>> afterPage = new HashMap<>();
+                HashSet<Long> committed = new HashSet<>();
+                long recoverOffset = getRecoverOffset();
+                if(recoverOffset != -1L){
+                    raf.seek(recoverOffset);
+                }
+
+                while (true){
+                    try {
+                        int curType = raf.readInt();
+                        long curTid = raf.readLong();
+                        switch (curType){
+
+                            case COMMIT_RECORD:
+                                committed.add(curTid);
+                                break;
+
+                            case CHECKPOINT_RECORD:
+                                int keySize = raf.readInt();
+                                while (keySize-- > 0) {
+                                    raf.readLong();
+                                    raf.readLong();
+                                }
+                                break;
+
+                            case UPDATE_RECORD:
+                                Page beforeImg = readPageData(raf);
+                                Page afterImg = readPageData(raf);
+                                List<Page> undoList = beforePage.getOrDefault(curTid,new ArrayList<>());
+                                List<Page> redoList = afterPage.getOrDefault(curTid,new ArrayList<>());
+                                undoList.add(beforeImg);
+                                redoList.add(afterImg);
+                                beforePage.put(curTid,undoList);
+                                afterPage.put(curTid,redoList);
+
+                        }
+                        // 略过offset
+                        raf.readLong();
+                    }catch (EOFException e){
+                        break;
+                    }
+
+                }
+                // uncommited:利用before进行undo
+                for (long tid :beforePage.keySet()) {
+                    if (!committed.contains(tid)) {
+                        List<Page> pages = beforePage.get(tid);
+                        for (Page undo : pages) {
+                            Database.getCatalog().getDatabaseFile(undo.getId().getTableId()).writePage(undo);
+                        }
+                    }
+                }
+
+                // commited:利用after进行redo
+                for (long tid : committed) {
+                    if (afterPage.containsKey(tid)) {
+                        List<Page> pages = afterPage.get(tid);
+                        for (Page redo : pages) {
+                            Database.getCatalog().getDatabaseFile(redo.getId().getTableId()).writePage(redo);
+                        }
+                    }
+                }
+
+
+
+
             }
          }
     }
+
+    public synchronized long getRecoverOffset(){
+        try {
+            raf.seek(0);
+            long checkPoint = raf.readLong();
+            if(checkPoint == -1){
+                return -1L;
+            }else {
+                // 移动到检查点,并略过日志头（type,tid信息）
+                raf.seek(checkPoint);
+                raf.readInt();
+                raf.readLong();
+                int keySize = raf.readInt();
+                long recoverOffset = Long.MAX_VALUE;
+                while (keySize-- > 0) {
+                    raf.readLong();
+                    long offset = raf.readLong();
+                    if(offset < recoverOffset){
+                        recoverOffset = offset;
+                    }
+                }
+                return recoverOffset;
+
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     /** Print out a human readable represenation of the log */
     public void print() throws IOException {

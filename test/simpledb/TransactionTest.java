@@ -92,6 +92,8 @@ public class TransactionTest extends TestUtil.CreateHeapFile {
       Tuple tup = it.next();
       IntField f0 = (IntField) tup.getField(0);
       IntField f1 = (IntField) tup.getField(1);
+//      System.out.println("f0:"+f0.getValue());
+//      System.out.println("f1:"+f1.getValue());
 
       if (f0.getValue() == 6 && f1.getValue() == 830) {
         found = true;

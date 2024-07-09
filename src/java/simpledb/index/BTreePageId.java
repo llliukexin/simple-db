@@ -17,6 +17,8 @@ public class BTreePageId implements PageId {
 
 	private final int tableId;
 	private final int pgNo;
+
+	/* 节点类型 */
 	private final int pgcateg;
 
 	static public String categToString(int categ) {

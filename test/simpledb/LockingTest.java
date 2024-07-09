@@ -14,7 +14,7 @@ import simpledb.storage.PageId;
 import simpledb.transaction.TransactionId;
 
 public class LockingTest extends TestUtil.CreateHeapFile {
-  private PageId p0;
+    private PageId p0;
     private PageId p1;
     private TransactionId tid1, tid2;
 

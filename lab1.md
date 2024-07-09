@@ -360,11 +360,7 @@ sequential scan. You will add support for additional operators in future labs.
 
 ### 2.1. The Database Class
 
-The Database class provides access to a collection of static objects that are the global state of the database. In
-particular, this includes methods to access the catalog (the list of all the tables in the database), the buffer pool (
-the collection of database file pages that are currently resident in memory), and the log file. You will not need to
-worry about the log file in this lab. We have implemented the Database class for you. You should take a look at this
-file as you will need to access these objects.
+The Database class provides access to a collection of static objects that are the global state of the database. In particular, this includes methods to access the catalog (the list of all the tables in the database), the buffer pool (the collection of database file pages that are currently resident in memory), and the log file. You will not need to worry about the log file in this lab. We have implemented the Database class for you. You should take a look at this file as you will need to access these objects.
 
 ### 2.2. Fields and Tuples
 
@@ -381,8 +377,7 @@ file as you will need to access these objects.
 ***
 
 
-At this point, your code should pass the unit tests TupleTest and TupleDescTest. At this point, modifyRecordId() should
-fail because you havn't implemented it yet.
+At this point, your code should pass the unit tests TupleTest and TupleDescTest. At this point, modifyRecordId() should fail because you havn't implemented it yet.
 
 ### 2.3. Catalog
 
@@ -402,7 +397,7 @@ using `Database.getBufferPool()`).
 
 * src/java/simpledb/common/Catalog.java
 
-*** 
+***
 
 At this point, your code should pass the unit tests in CatalogTest.
 
@@ -542,7 +537,7 @@ disk.
 
 * src/java/simpledb/storage/HeapFile.java
 
-*** 
+***
 
 To read a page from disk, you will first need to calculate the correct offset in the file. Hint: you will need random
 access to the file in order to read and write pages at arbitrary offsets. You should not call BufferPool methods when
